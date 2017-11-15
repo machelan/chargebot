@@ -1,11 +1,12 @@
 #!/usr/bin/python3.4
 # -- coding: utf-8 --
 import config
-import telebot
 import datetime
-import sys
-import threading
 import re
+import sys
+import telebot
+import threading
+
 
 #codes_dict = {'A01': ['Michael Glinka by Unknown Author', 91531717],'A02': ['Powerful Art ', 91531717]}
 codes_dict = {}
@@ -15,6 +16,10 @@ admin_id = config.admin_id
 shell_enable = 0
 log_lock = threading.Lock()
 dict_lock = threading.Lock()
+
+
+def is_approver(id):
+    return id in config.approvers
 
 
 def log(message=None, error=None):
@@ -56,16 +61,41 @@ def load_dict():
     for line in lines:
         fields = line.split(b';')
         #codes_dict[fields[0].decode("utf-8")] = [fields[1], list(map(lambda x: int(x.decode("utf-8")), fields[2:]))]
+        if fields[2] == b'\n':
+            continue
         dict_value = list(map(lambda x: int(x.decode("utf-8")), fields[2:]))
         dict_value.insert(0, fields[1])
         codes_dict[fields[0].decode("utf-8")] = dict_value
     print(codes_dict)
 
 
-def add_new_code(code):
+def save_dict():
     global codes_dict
-    codes_dict[code] = 0
+    dict_lock.acquire()
+    f = open('dict.txt', 'wb')
+    for key in codes_dict:
+        line = key + ";" + codes_dict[key][0].decode("utf-8") + ";" + ';'.join(map(lambda x: str(x), codes_dict[key][1:])) + "\n"
+        f.write(line.encode("utf-8"))
+    dict_lock.release()
+
+
+def add_new_code(code, name):
+    global codes_dict
+    name = name.replace(';', ':')
+    codes_dict[code] = [name.encode("utf-8")]
     print(codes_dict)
+
+
+def add_new_id(code, id):
+    global codes_dict
+    id = int(id)
+    if code not in codes_dict:
+        return -1
+    if id in codes_dict[code][1:]:
+        return -2
+    codes_dict[code].append(id)
+    print(codes_dict[code])
+    return 0
 
 
 def quiting():
@@ -117,22 +147,54 @@ def command_answer(message):
 @bot.message_handler(commands=['add_code'])
 def command_answer(message):
     log(message)
-    fields = message.text.split(' ')
-    if len(fields) > 1:
-        add_new_code(fields[1])
-        bot.send_message(message.chat.id, fields[1] + u' added')
+    if is_approver(message.from_user.id) == False:
+        return
+    if len(message.text) < 15:
+        return
+    code = message.text[10:13]
+    name = message.text[14:]
+    add_new_code(code, name)
+    bot.send_message(message.chat.id, code + ' ' + name + u' added')
+
+
+@bot.message_handler(commands=['add_member'])
+def command_answer(message):
+    log(message)
+    if is_approver(message.from_user.id) == False:
+        return
+    if len(message.text) < 17:
+        return
+    code = message.text[12:15]
+    id = message.text[16:]
+    ret = add_new_id(code, id)
+    if ret == -1:
+        bot.send_message(message.chat.id, code + u' not found')
+        return
+    elif ret == -2:
+        bot.send_message(message.chat.id, code + u' already exist')
+        return
+    bot.send_message(message.chat.id, id + u' added to ' + code)
 
 
 @bot.message_handler(commands=['get_codes'])
 def command_answer(message):
     log(message)
-    if message.from_user.id == admin_id:
-        bot.send_message(message.chat.id, '\n'.join(codes_dict.keys()))
+    if is_approver(message.from_user.id) == False:
+        return
+    bot.send_message(message.chat.id, '\n'.join(codes_dict.keys()))
 
 
 @bot.message_handler(commands=['start'])
 def command_answer(message):
     log(message)
+
+
+@bot.message_handler(commands=['save'])
+def command_answer(message):
+    log(message)
+    if is_approver(message.from_user.id) == False:
+        return
+    save_dict()
 
 
 @bot.message_handler(regexp="DO NOT RECHARGE")
@@ -174,7 +236,7 @@ def main_loop():
         print(str(datetime.datetime.now()) + ' Poling starting')
         load_dict()
         #bot._TeleBot__skip_updates()
-        bot.polling(none_stop=True)
+        bot.polling(none_stop=True, timeout=86400)
     except Exception:
         exc_type, exc_value, exc_traceback = sys.exc_info()
         log(error=str(exc_type) + ' ' + str(exc_value))
