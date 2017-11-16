@@ -10,16 +10,25 @@ import threading
 
 #codes_dict = {'A01': ['Michael Glinka by Unknown Author', 91531717],'A02': ['Powerful Art ', 91531717]}
 codes_dict = {}
+members_dict = {}
 
 bot = telebot.TeleBot(config.token)
 admin_id = config.admin_id
 shell_enable = 0
 log_lock = threading.Lock()
 dict_lock = threading.Lock()
+members_lock = threading.Lock()
 
 
 def is_approver(id):
     return id in config.approvers
+
+
+def get_id_by_username(username):
+    for id, name in members_dict.items():
+        if name == username:
+            return id
+    return 0
 
 
 def log(message=None, error=None):
@@ -76,7 +85,21 @@ def save_dict():
     for key in codes_dict:
         line = key + ";" + codes_dict[key][0].decode("utf-8") + ";" + ';'.join(map(lambda x: str(x), codes_dict[key][1:])) + "\n"
         f.write(line.encode("utf-8"))
+    f.close()
     dict_lock.release()
+
+
+def load_members():
+    global members_dict
+    members_lock.acquire()
+    f = open('members.txt', 'rb')
+    lines = f.readlines()
+    members_lock.release()
+    f.close()
+    for line in lines:
+        fields = line.split(b';')
+        members_dict[int(fields[0].decode("utf-8"))] = fields[1][:-1]
+    print(members_dict)
 
 
 def add_new_code(code, name):
@@ -165,7 +188,13 @@ def command_answer(message):
     if len(message.text) < 17:
         return
     code = message.text[12:15]
-    id = message.text[16:]
+    username = message.text[16:]
+    username = username.encode("utf-8")
+    print(username)
+    id = get_id_by_username(username)
+    if id is 0:
+        bot.send_message(message.chat.id, username + u' did not press start')
+        return
     ret = add_new_id(code, id)
     if ret == -1:
         bot.send_message(message.chat.id, code + u' not found')
@@ -173,7 +202,7 @@ def command_answer(message):
     elif ret == -2:
         bot.send_message(message.chat.id, code + u' already exist')
         return
-    bot.send_message(message.chat.id, id + u' added to ' + code)
+    bot.send_message(message.chat.id, message.text[16:] + u' added to ' + code)
 
 
 @bot.message_handler(commands=['get_codes'])
@@ -181,12 +210,43 @@ def command_answer(message):
     log(message)
     if is_approver(message.from_user.id) == False:
         return
-    bot.send_message(message.chat.id, '\n'.join(codes_dict.keys()))
+    text = ""
+    for key in codes_dict:
+        line = key + " : " + codes_dict[key][0].decode("utf-8") + "\n"
+        text += line
+    bot.send_message(message.chat.id, text)
+
+
+@bot.message_handler(commands=['get_members'])
+def command_answer(message):
+    log(message)
+    if is_approver(message.from_user.id) == False:
+        return
+    text = ""
+    for key in codes_dict:
+        line = key + " : " + ', '.join(map(lambda x: members_dict[x].decode("utf-8"), codes_dict[key][1:])) + "\n"
+        text += line
+    bot.send_message(message.chat.id, text)
 
 
 @bot.message_handler(commands=['start'])
 def command_answer(message):
     log(message)
+    if members_dict.get(message.chat.id, 0) != 0:
+        return
+    try:
+        members_dict[message.chat.id] = message.from_user.username.encode("utf-8")
+        line = str(message.chat.id) + ";" + message.from_user.username + "\n"
+        line = line.encode('utf-8')
+        print(line)
+        members_lock.acquire()
+        f = open('members.txt', 'ab')
+        f.write(line)
+        f.close()
+        members_lock.release()
+    except Exception:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        log(error=str(exc_type) + ' ' + str(exc_value))
 
 
 @bot.message_handler(commands=['save'])
@@ -235,6 +295,7 @@ def main_loop():
     try:
         print(str(datetime.datetime.now()) + ' Poling starting')
         load_dict()
+        load_members()
         #bot._TeleBot__skip_updates()
         bot.polling(none_stop=True, timeout=86400)
     except Exception:
