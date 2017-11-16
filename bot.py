@@ -126,35 +126,40 @@ def quiting():
 
 
 def recharging(message):
-    res = re.findall(r': [A-Z]\d\d', str(message.text))
+    res = re.findall(r'Recharge: \w* ', str(message.text))
     for entry in res:
-        dict_key = entry[2::]
+        splited_entry = entry[:-1].split(' ', 1)
+        dict_key = splited_entry[1]
         name = codes_dict.get(dict_key, 0)
-        if name != 0:
-            print('Charge ' + name[0].decode("utf-8"))
-            id_arr = name[1:]
-            for teleg_id in id_arr:
-                try:
-                    bot.send_message(teleg_id, u'Чардж портал ' + dict_key + ' ' + name[0].decode("utf-8"))
-                except Exception:
-                    exc_type, exc_value, exc_traceback = sys.exc_info()
-                    log(error=str(exc_type) + ' ' + str(exc_value))
+        if name == 0:
+            continue
+        print('Charge ' + name[0].decode("utf-8"))
+        id_arr = name[1:]
+        for teleg_id in id_arr:
+            try:
+                bot.send_message(teleg_id, u'Чардж портал ' + dict_key + ' ' + name[0].decode("utf-8"))
+            except Exception:
+                exc_type, exc_value, exc_traceback = sys.exc_info()
+                log(error=str(exc_type) + ' ' + str(exc_value))
 
 
 def notrecharging(message):
     res = re.findall(r': [A-Z]\d\d', str(message.text))
+    res = re.findall(r'DO NOT RECHARGE: \w* ', str(message.text))
     for entry in res:
-        dict_key = entry[2::]
+        splited_entry = entry[:-1].split(' ', 1)
+        dict_key = splited_entry[1]
         name = codes_dict.get(dict_key, 0)
-        if name != 0:
-            print('Do not ' + name[0].decode("utf-8"))
-            id_arr = name[1:]
-            for teleg_id in id_arr:
-                try:
-                    bot.send_message(teleg_id, u'Не чардж портал ' + dict_key + ' ' + name[0].decode("utf-8"))
-                except Exception:
-                    exc_type, exc_value, exc_traceback = sys.exc_info()
-                    log(error=str(exc_type) + ' ' + str(exc_value))
+        if name == 0:
+            continue
+        print('Do not ' + name[0].decode("utf-8"))
+        id_arr = name[1:]
+        for teleg_id in id_arr:
+            try:
+                bot.send_message(teleg_id, u'Не чардж портал ' + dict_key + ' ' + name[0].decode("utf-8"))
+            except Exception:
+                exc_type, exc_value, exc_traceback = sys.exc_info()
+                log(error=str(exc_type) + ' ' + str(exc_value))
 
 
 @bot.message_handler(commands=['exit'])
@@ -173,8 +178,9 @@ def command_answer(message):
         return
     if len(message.text) < 15:
         return
-    code = message.text[10:13]
-    name = message.text[14:]
+    str_arr = message.text.split(' ', 2)
+    code = str_arr[1]
+    name = str_arr[2]
     add_new_code(code, name)
     bot.send_message(message.chat.id, code + ' ' + name + u' added')
 
@@ -186,8 +192,9 @@ def command_answer(message):
         return
     if len(message.text) < 17:
         return
-    code = message.text[12:15]
-    username = message.text[16:]
+    str_arr = message.text.split(' ', 2)
+    code = str_arr[1]
+    username = str_arr[2]
     username = username.encode("utf-8")
     print(username)
     id = get_id_by_username(username)
@@ -201,7 +208,7 @@ def command_answer(message):
     elif ret == -2:
         bot.send_message(message.chat.id, code + u' already exist')
         return
-    bot.send_message(message.chat.id, message.text[16:] + u' added to ' + code)
+    bot.send_message(message.chat.id, str_arr[2] + u' added to ' + code)
 
 
 @bot.message_handler(commands=['get_codes'])
@@ -295,7 +302,7 @@ def main_loop():
         print(str(datetime.datetime.now()) + ' Poling starting')
         load_dict()
         load_members()
-        #bot._TeleBot__skip_updates()
+        bot._TeleBot__skip_updates()
         bot.polling(none_stop=True, timeout=86400)
     except Exception:
         exc_type, exc_value, exc_traceback = sys.exc_info()
