@@ -8,7 +8,6 @@ import telebot
 import threading
 
 
-#codes_dict = {'A01': ['Michael Glinka by Unknown Author', 91531717],'A02': ['Powerful Art ', 91531717]}
 codes_dict = {}
 members_dict = {}
 
