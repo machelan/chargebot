@@ -180,6 +180,8 @@ def command_answer(message):
     if len(message.text) < 15:
         return
     str_arr = message.text.split(' ', 2)
+    if len(str_arr) < 3:
+        return
     code = str_arr[1]
     name = str_arr[2]
     add_new_code(code, name)
@@ -227,27 +229,32 @@ def command_answer(message):
 @bot.message_handler(commands=['add_member'])
 def command_answer(message):
     log(message)
+    username = " "
+    id = 0
     if is_approver(message.from_user.id) == False:
         return
-    if len(message.text) < 17:
+    str_arr = message.text.split(' ')
+    if len(str_arr) < 2:
         return
-    str_arr = message.text.split(' ', 2)
-    code = str_arr[1]
-    username = str_arr[2]
-    username = username.encode("utf-8")
-    print(username)
-    id = get_id_by_username(username)
-    if id is 0:
-        bot.send_message(message.chat.id, username + u' did not press start')
-        return
-    ret = add_new_id(code, id)
-    if ret == -1:
-        bot.send_message(message.chat.id, code + u' not found')
-        return
-    elif ret == -2:
-        bot.send_message(message.chat.id, code + u' already exist')
-        return
-    bot.send_message(message.chat.id, str_arr[2] + u' added to ' + code)
+    elif len(str_arr) == 2:
+        usernames = [message.from_user.username]
+    else: 
+        usernames = str_arr[2:]
+    for username in usernames:
+        username = username.encode("utf-8")
+        id = get_id_by_username(username)
+        code = str_arr[1]
+        if id is 0:
+            bot.send_message(message.chat.id, username.decode("utf-8") + u' did not press start')
+            continue
+        ret = add_new_id(code, id)
+        if ret == -1:
+            bot.send_message(message.chat.id, code + u' not found')
+            continue
+        elif ret == -2:
+            bot.send_message(message.chat.id, username.decode("utf-8") + u' already exist on ' + code)
+            continue
+        bot.send_message(message.chat.id, username.decode("utf-8") + u' added to ' + code)
 
 
 @bot.message_handler(commands=['get_members'])
