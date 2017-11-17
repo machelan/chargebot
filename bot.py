@@ -13,7 +13,7 @@ members_dict = {}
 
 bot = telebot.TeleBot(config.token)
 admin_id = config.admin_id
-shell_enable = 0
+
 log_lock = threading.Lock()
 dict_lock = threading.Lock()
 members_lock = threading.Lock()
@@ -61,6 +61,7 @@ def log(message=None, error=None):
 
 def load_dict():
     global codes_dict
+    codes_dict.clear()
     dict_lock.acquire()
     f = open('dict.txt', 'rb')
     lines = f.readlines()
@@ -185,6 +186,44 @@ def command_answer(message):
     bot.send_message(message.chat.id, code + ' ' + name + u' added')
 
 
+@bot.message_handler(commands=['get_codes'])
+def command_answer(message):
+    log(message)
+    if is_approver(message.from_user.id) == False:
+        return
+    text = ""
+    for key in codes_dict:
+        line = key + " : " + codes_dict[key][0].decode("utf-8") + "\n"
+        text += line
+    if text == "":
+        text = "There are no codes here!"
+    bot.send_message(message.chat.id, text)
+
+
+@bot.message_handler(commands=['delete_code'])
+def command_answer(message):
+    log(message)
+    if is_approver(message.from_user.id) == False:
+        return
+    str_arr = message.text.split(' ', 1)
+    if len(str_arr) is 1:
+        return
+    code =  str_arr[1]
+    if codes_dict.pop(code, 0) == 0:
+        bot.send_message(message.chat.id, code + u' not found')
+        return
+    bot.send_message(message.chat.id, code + u' deleted')
+
+
+@bot.message_handler(commands=['delete_all'])
+def command_answer(message):
+    log(message)
+    if is_approver(message.from_user.id) == False:
+        return
+    codes_dict.clear()
+    bot.send_message(message.chat.id, 'All clear! Don\'t forget to save changes.')
+
+
 @bot.message_handler(commands=['add_member'])
 def command_answer(message):
     log(message)
@@ -211,18 +250,6 @@ def command_answer(message):
     bot.send_message(message.chat.id, str_arr[2] + u' added to ' + code)
 
 
-@bot.message_handler(commands=['get_codes'])
-def command_answer(message):
-    log(message)
-    if is_approver(message.from_user.id) == False:
-        return
-    text = ""
-    for key in codes_dict:
-        line = key + " : " + codes_dict[key][0].decode("utf-8") + "\n"
-        text += line
-    bot.send_message(message.chat.id, text)
-
-
 @bot.message_handler(commands=['get_members'])
 def command_answer(message):
     log(message)
@@ -231,6 +258,29 @@ def command_answer(message):
     text = ""
     for key in codes_dict:
         line = key + " : " + ', '.join(map(lambda x: members_dict[x].decode("utf-8"), codes_dict[key][1:])) + "\n"
+        text += line
+    if text == "":
+        text = "Nobody's here!"
+    bot.send_message(message.chat.id, text)
+
+
+@bot.message_handler(commands=['reload'])
+def command_answer(message):
+    log(message)
+    if is_approver(message.from_user.id) == False:
+        return
+    load_dict()
+    bot.send_message(message.chat.id, u"Base reloaded")
+
+
+@bot.message_handler(commands=['get_joined'])
+def command_answer(message):
+    log(message)
+    if is_approver(message.from_user.id) == False:
+        return
+    text = ""
+    for key in members_dict:
+        line = str(key) + " : " + members_dict[key].decode("utf-8") + "\n"
         text += line
     bot.send_message(message.chat.id, text)
 
@@ -261,14 +311,17 @@ def command_answer(message):
     if is_approver(message.from_user.id) == False:
         return
     save_dict()
+    bot.send_message(message.chat.id, u"Changes commited")
 
 
+@bot.channel_post_handler(regexp="DO NOT RECHARGE")
 @bot.message_handler(regexp="DO NOT RECHARGE")
 def handle_message(message):
     log(message)
     notrecharging(message)
 
 
+@bot.channel_post_handler(regexp="Recharge")
 @bot.message_handler(regexp="Recharge")
 def handle_message(message):
     log(message)
@@ -278,18 +331,6 @@ def handle_message(message):
 @bot.message_handler(content_types=["text"])
 def repeat_all_messages(message):
     log(message)
-
-
-@bot.channel_post_handler(regexp="Recharge")
-def handle_message(message):
-    log(message)
-    recharging(message)
-
-
-@bot.channel_post_handler(regexp="DO NOT RECHARGE")
-def handle_message(message):
-    log(message)
-    notrecharging(message)
 
 
 @bot.channel_post_handler(content_types=["text"])
